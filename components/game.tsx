@@ -10,7 +10,6 @@ import {
   Button,
 } from "react-native";
 import { GameEngine } from "react-native-game-engine-skia";
-import { Gyroscope, GyroscopeMeasurement } from "expo-sensors";
 import { Accelerometer } from "expo-sensors";
 
 const { width, height } = Dimensions.get("screen");
@@ -55,9 +54,9 @@ export default class GameScreen extends React.Component {
   private world: Matter.World;
   private entity_count: number = 0;
   private gravity_dir: { x: number; y: number } = { x: 0, y: 1 };
-  private gyro_enabled: boolean = false;
-  private gyro_subscription: any | null = null;
-  private gyroscopeData: {
+  private Accelerometer_enabled: boolean = false;
+  private Accelerometer_subscription: any | null = null;
+  private AccelerometerscopeData: {
     x: number;
     y: number;
     z: number;
@@ -71,10 +70,12 @@ export default class GameScreen extends React.Component {
     this.world = this.engine.world;
   }
 
-  private setGyro = (gyroscopeData: GyroscopeMeasurement) => {
-    console.log(gyroscopeData);
-    this.gyroscopeData == gyroscopeData;
-    let vec3 = normalizeVector3(gyroscopeData);
+  private setAccelerometer = (
+    AccelerometerscopeData: AccelerometerscopeMeasurement
+  ) => {
+    console.log(AccelerometerscopeData);
+    this.AccelerometerscopeData == AccelerometerscopeData;
+    let vec3 = normalizeVector3(AccelerometerscopeData);
     this.gravity_dir = { x: vec3.x, y: vec3.y };
   };
 
@@ -187,24 +188,16 @@ export default class GameScreen extends React.Component {
     return entities;
   };
 
-  private toggleGyro = () => {
-    this.gyro_enabled = !this.gyro_enabled;
-    if (this.gyro_enabled) {
-      this.gyro_subscription = Accelerometer.addListener(({ x, y, z }) => {
-        // Check which axis is most influenced by gravity (largest absolute value)
-        // and set gravity accordingly.
-        // let vec3 = normalizeVector3({ x: x * -1, y, z });
-        this.gravity_dir = { x: x * -1, y: y };
-        // if (Math.abs(x) > Math.abs(y)) {
-        //   // Left/right side is down
-        //   this.gravity_dir = { x: x < 0 ? 1 : -1, y: 0 };
-        // } else {
-        //   // Top/bottom side is down
-        //   this.gravity_dir = { x: 0, y: y < 0 ? -1 : 1 };
-        // }
-      });
+  private toggleAccelerometer = () => {
+    this.Accelerometer_enabled = !this.Accelerometer_enabled;
+    if (this.Accelerometer_enabled) {
+      this.Accelerometer_subscription = Accelerometer.addListener(
+        ({ x, y, z }) => {
+          this.gravity_dir = { x: x * -1, y: y };
+        }
+      );
     } else {
-      this.gyro_subscription.remove();
+      this.Accelerometer_subscription.remove();
     }
   };
 
@@ -281,12 +274,15 @@ export default class GameScreen extends React.Component {
           <Button onPress={this.resetGame} title="Reset" />
         </View>
         <View style={{ position: "absolute", top: 30, left: 100 }}>
-          <Button onPress={this.toggleGyro} title="Toggle Gyro" />
+          <Button
+            onPress={this.toggleAccelerometer}
+            title="Toggle Accelerometer"
+          />
         </View>
         {/* <View style={{ position: "absolute", top: 70, left: 100, flex: 1 }}>
           <Text>
-            x: {this.gyroscopeData.x} y: {this.gyroscopeData.y} z:{" "}
-            {this.gyroscopeData.z}
+            x: {this.AccelerometerscopeData.x} y: {this.AccelerometerscopeData.y} z:{" "}
+            {this.AccelerometerscopeData.z}
           </Text>
         </View> */}
         <StatusBar hidden={true} />
