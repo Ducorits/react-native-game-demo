@@ -23,10 +23,6 @@ type EntityType = {
 };
 
 type EntitiesType = {
-  physics: {
-    engine: Matter.Engine;
-    world: Matter.World;
-  };
   [key: string]: EntityType | any;
 };
 
@@ -47,7 +43,7 @@ export default class GameScreen extends React.Component {
   private boxIds: number = 0;
   private engine: Matter.Engine;
   private world: Matter.World;
-  private startEntities: EntitiesType;
+  private entity_count: number = 0;
 
   constructor(props: any) {
     super(props);
@@ -55,56 +51,83 @@ export default class GameScreen extends React.Component {
     // Initialize physics engine
     this.engine = Matter.Engine.create({ enableSleeping: false });
     this.world = this.engine.world;
-
-    // Create initial entities
-    this.startEntities = this.createInitialEntities();
   }
 
+  private addRectangle = (
+    entities: EntitiesType,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    color: string,
+    options?: Matter.IChamferableBodyDefinition
+  ) => {
+    const rectangle = Matter.Bodies.rectangle(x, y, width, height, options);
+    Matter.World.add(this.world, rectangle);
+
+    entities[++this.entity_count] = {
+      body: rectangle,
+      size: [width, height],
+      color: color,
+      renderer: Box,
+    };
+  };
+
   // Creates the initial game entities
-  private createInitialEntities(): EntitiesType {
+  private addInitialEntities(entities: EntitiesType) {
     const boxSize = getBoxSize();
 
-    const initialBox = Matter.Bodies.rectangle(
+    //Start box
+    this.addRectangle(
+      entities,
       width / 2,
       height / 2,
       boxSize,
       boxSize,
+      "red",
       {
         frictionAir: 0.021,
         restitution: 0.5,
       }
     );
-
-    const floor = Matter.Bodies.rectangle(
+    //Floor
+    this.addRectangle(
+      entities,
       width / 2,
       height - boxSize,
       width,
       boxSize,
+      "green",
       { isStatic: true }
     );
-
-    Matter.World.add(this.world, [initialBox, floor]);
-
-    return {
-      physics: {
-        engine: this.engine,
-        world: this.world,
-      },
-      initialBox: {
-        body: initialBox,
-        size: [boxSize, boxSize],
-        static: false,
-        color: "red",
-        renderer: Box,
-      },
-      floor: {
-        body: floor,
-        size: [width, boxSize],
-        static: true,
-        color: "green",
-        renderer: Box,
-      },
-    };
+    //Ceiling
+    this.addRectangle(entities, width / 2, 10, width, boxSize, "green", {
+      isStatic: true,
+    });
+    //Left Wall
+    this.addRectangle(
+      entities,
+      -boxSize / 2,
+      height / 2,
+      boxSize,
+      height,
+      "green",
+      {
+        isStatic: true,
+      }
+    );
+    //Right Wall
+    this.addRectangle(
+      entities,
+      width + boxSize / 2,
+      height / 2,
+      boxSize,
+      height,
+      "green",
+      {
+        isStatic: true,
+      }
+    );
   }
 
   // Creates a new box at the touch position
@@ -115,36 +138,49 @@ export default class GameScreen extends React.Component {
       screen,
     }: { touches: TouchEvent[]; screen: { width: number; height: number } }
   ) => {
-    const world = entities["physics"].world;
     const boxSize = Math.trunc(Math.max(screen.width, screen.height) * 0.075);
 
     touches
       .filter((t: TouchEvent) => t.type === "press")
       .forEach((t: TouchEvent) => {
-        const body = Matter.Bodies.rectangle(
+        console.log("entities in createBox:");
+        console.log(entities);
+        const world = this.world;
+        this.addRectangle(
+          entities,
           t.event.pageX,
           t.event.pageY,
           boxSize,
           boxSize,
-          { frictionAir: 0.021, restitution: 1.0 }
+          this.entity_count % 2 == 0 ? "pink" : "#B8E986",
+          { frictionAir: 0.021, restitution: 0.5 }
         );
-        Matter.World.add(world, [body]);
-        entities[++this.boxIds] = {
-          body: body,
-          size: [boxSize, boxSize],
-          color: this.boxIds % 2 == 0 ? "pink" : "#B8E986",
-          renderer: Box,
-        };
       });
     return entities;
   };
 
-  // Resets the game by removing all bodies from the world
+  private startedHandler = (entities: EntitiesType) => {
+    this.addInitialEntities(entities);
+    return entities;
+  };
+
+  // Resets the game physics by removing all bodies from the physics world
   private reset = (entities: EntitiesType) => {
-    const physics = entities["physics"];
-    const world = physics.world;
+    // Reset all physics bodies.
+    const world = this.world;
     const bodies = Matter.Composite.allBodies(world);
     Matter.World.remove(world, bodies);
+
+    let oldEntities = Object.keys(entities).map((key) => ({ id: key }));
+
+    for (let i = 0; i < oldEntities.length; i++) {
+      let id = oldEntities[i].id;
+      console.log(id + entities[id]);
+      delete entities[oldEntities[i].id];
+    }
+
+    this.addInitialEntities(entities);
+
     return entities;
   };
 
@@ -153,13 +189,12 @@ export default class GameScreen extends React.Component {
     entities: EntitiesType,
     { time }: { time: { delta: number } }
   ) => {
-    const engine = entities["physics"].engine;
+    const engine = this.engine;
     Matter.Engine.update(engine, time.delta);
     return entities;
   };
 
-  // Handles reset events
-  private resetSystem = (
+  private eventsSystem = (
     entities: EntitiesType,
     { events = [] }: { events: GameEvent[] }
   ) => {
@@ -167,6 +202,8 @@ export default class GameScreen extends React.Component {
       events.forEach((event: GameEvent) => {
         if (event.type === "reset") {
           return this.reset(entities);
+        } else if (event.type === "started") {
+          return this.startedHandler(entities);
         }
       });
     }
@@ -181,36 +218,6 @@ export default class GameScreen extends React.Component {
       if (this.gameEngine.clear) {
         this.gameEngine.clear();
       }
-
-      this.forceUpdate();
-
-      setTimeout(() => {
-        if (this.gameEngine) {
-          const boxSize = getBoxSize();
-          const initialBox = Matter.Bodies.rectangle(
-            width / 2,
-            height / 2,
-            boxSize,
-            boxSize,
-            {
-              frictionAir: 0.021,
-              restitution: 0.5,
-            }
-          );
-
-          const floor = Matter.Bodies.rectangle(
-            width / 2,
-            height - boxSize,
-            width,
-            boxSize,
-            { isStatic: true }
-          );
-
-          Matter.World.add(this.world, [initialBox, floor]);
-          this.gameEngine.swap(this.startEntities);
-          this.forceUpdate();
-        }
-      }, 50);
     }
   };
 
@@ -221,10 +228,11 @@ export default class GameScreen extends React.Component {
           this.gameEngine = ref;
         }}
         style={styles.container}
-        systems={[this.physics, this.resetSystem, this.createBox]}
-        entities={this.startEntities}
+        systems={[this.physics, this.eventsSystem, this.createBox]}
       >
-        <Button onPress={this.resetGame} title="Reset" />
+        <View style={{ position: "absolute", top: 30 }}>
+          <Button onPress={this.resetGame} title="Reset" />
+        </View>
         <StatusBar hidden={true} />
       </GameEngine>
     );
